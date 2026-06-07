@@ -1,0 +1,14 @@
+{
+  "name": "kintone-js-customize-sample",
+  "version": "1.0.0",
+  "private": true,
+  "description": "kintone JavaScript customize sample",
+  "scripts": {
+    "plugin:keygen": "cli-kintone plugin keygen --output kintone/plugin/private.ppk",
+    "plugin:pack": "cli-kintone plugin pack",
+    "plugin:upload": "cli-kintone plugin upload"
+  },
+  "devDependencies": {
+    "@kintone/cli": "1.19.2"
+  }
+}

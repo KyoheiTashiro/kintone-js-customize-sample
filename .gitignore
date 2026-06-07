@@ -1,0 +1,5 @@
+.DS_Store
+*.ppk
+*.zip
+node_modules/
+.env

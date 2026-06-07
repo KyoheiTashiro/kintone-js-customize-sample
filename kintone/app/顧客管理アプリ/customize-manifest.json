@@ -1,0 +1,15 @@
+{
+  "scope": "ALL",
+  "desktop": {
+    "js": [
+      "js/pc/validate-input.js"
+    ],
+    "css": []
+  },
+  "mobile": {
+    "js": [
+      "js/mobile/validate-input.js"
+    ],
+    "css": []
+  }
+}

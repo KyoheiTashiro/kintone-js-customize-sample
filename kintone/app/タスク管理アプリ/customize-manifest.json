@@ -1,0 +1,16 @@
+{
+  "scope": "ALL",
+  "desktop": {
+    "js": [
+      "js/pc/select-customer-modal.js",
+      "js/pc/sync-task-event-to-google-calendar.js"
+    ],
+    "css": []
+  },
+  "mobile": {
+    "js": [
+      "js/mobile/select-customer-modal.js"
+    ],
+    "css": []
+  }
+}

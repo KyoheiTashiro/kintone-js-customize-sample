@@ -1,0 +1,25 @@
+<div id="plugin-config">
+  <div style="max-width: 960px; margin: 16px; font-family: sans-serif;">
+    <h2 style="font-size: 18px; margin-bottom: 16px;">Proxy Route Settings</h2>
+
+    <div id="entries-container"></div>
+
+    <div style="display: flex; gap: 8px; margin-top: 16px;">
+      <button id="add-button" style="padding: 8px 24px; background: #2ecc71; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Add</button>
+      <button id="save-button" style="padding: 8px 24px; background: #3498db; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Save</button>
+      <button id="cancel-button" style="padding: 8px 24px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+    </div>
+
+    <div style="margin-top: 24px; padding: 16px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #555; line-height: 1.8;">
+      <h3 style="font-size: 14px; margin: 0 0 8px;">各フィールドの説明</h3>
+      <dl style="margin: 0;">
+        <dt style="font-weight: bold;">Route Name</dt>
+        <dd style="margin: 0 0 8px 16px;">JS側で参照する識別子（例: <code>TASK_COMPLETED_NOTIFY</code>）</dd>
+        <dt style="font-weight: bold;">URL</dt>
+        <dd style="margin: 0 0 8px 16px;">外部APIのエンドポイントURL</dd>
+        <dt style="font-weight: bold;">Token</dt>
+        <dd style="margin: 0 0 0 16px;">外部API側で認可に使用するアクセストークン。初回登録時は必須。更新時は変更したい場合のみ入力（空欄なら既存トークンを維持）</dd>
+      </dl>
+    </div>
+  </div>
+</div>

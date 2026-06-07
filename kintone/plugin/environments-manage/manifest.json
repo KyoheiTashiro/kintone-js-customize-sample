@@ -1,0 +1,22 @@
+{
+  "manifest_version": 1,
+  "version": 1,
+  "type": "APP",
+  "name": {
+    "en": "environments-manage"
+  },
+  "description": {
+    "en": "Manage environment variables as key-value pairs."
+  },
+  "icon": "image/icon.png",
+  "desktop": {
+    "js": ["js/desktop.js"]
+  },
+  "mobile": {
+    "js": ["js/mobile.js"]
+  },
+  "config": {
+    "html": "html/config.html",
+    "js": ["js/config.js"]
+  }
+}

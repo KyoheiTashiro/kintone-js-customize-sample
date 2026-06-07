@@ -1,0 +1,40 @@
+name: Deploy to Production
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+    paths:
+      - 'kintone/app/**'
+      - 'scripts/apply-customize.js'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy kintone customizations (production)
+    runs-on: ubuntu-slim
+    environment: production
+
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to production
+        env:
+          KINTONE_BASE_URL: ${{ secrets.KINTONE_BASE_URL }}
+          KINTONE_USERNAME: ${{ secrets.KINTONE_USERNAME }}
+          KINTONE_PASSWORD: ${{ secrets.KINTONE_PASSWORD }}
+        run: node scripts/apply-customize.js production
