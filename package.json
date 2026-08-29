@@ -4,11 +4,13 @@
   "private": true,
   "description": "kintone JavaScript customize sample",
   "scripts": {
-    "plugin:keygen": "cli-kintone plugin keygen --output kintone/plugin/private.ppk",
-    "plugin:pack": "cli-kintone plugin pack",
-    "plugin:upload": "cli-kintone plugin upload"
+    "deploy:local": "node --env-file=.env scripts/deploy/local.js",
+    "plugin:keygen": "cli-kintone plugin keygen --output kintone/plugin/private.ppk"
+  },
+  "engines": {
+    "node": ">=20.6.0"
   },
   "devDependencies": {
-    "@kintone/cli": "1.19.2"
+    "@kintone/cli": "1.21.0"
   }
 }

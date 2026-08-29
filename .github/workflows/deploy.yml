@@ -1,0 +1,76 @@
+name: Apply customize
+
+on:
+  push:
+    branches:
+      - stg
+      - main
+    paths:
+      - 'kintone/app/**'
+      - 'scripts/deploy/**'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Apply kintone customizations
+    runs-on: ubuntu-slim
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List apps to apply
+        id: list
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # 全てのアプリを列挙
+          apps=$(find kintone/app -mindepth 2 -maxdepth 2 -name customize-manifest.json -printf '%h\n' \
+            | sed 's|.*/||' | sort)
+          if [ -z "$apps" ]; then
+            echo "::error::no customize-manifest.json found under kintone/app"
+            exit 1
+          fi
+
+          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "::notice::previous commit is unavailable; deploying every app"
+          else
+            changed_files=$(git -c core.quotePath=false diff --name-only "$BEFORE" "$GITHUB_SHA")
+            if printf '%s\n' "$changed_files" | grep -qE '^scripts/deploy/|^package-lock\.json$|^\.github/workflows/deploy\.yml$'; then
+              echo "::notice::deploy script, dependencies or workflow changed; deploying every app"
+            else
+              # 変更ファイルのパスから、変更されたアプリ名を列挙
+              changed=$(printf '%s\n' "$changed_files" | grep '^kintone/app/' | cut -d/ -f3 | sort -u || true)
+              apps=$(comm -12 <(printf '%s\n' "$apps") <(printf '%s\n' "$changed"))
+            fi
+          fi
+
+          list=$(echo $apps)
+          echo "::notice::deploying ${list:-nothing}"
+          echo "apps=$list" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.list.outputs.apps != ''
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.list.outputs.apps != ''
+        run: npm ci
+
+      - name: Apply
+        if: steps.list.outputs.apps != ''
+        env:
+          KINTONE_BASE_URL: ${{ secrets.KINTONE_BASE_URL }}
+          KINTONE_USERNAME: ${{ secrets.KINTONE_USERNAME }}
+          KINTONE_PASSWORD: ${{ secrets.KINTONE_PASSWORD }}
+          TARGET_ENV: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+          APPS: ${{ steps.list.outputs.apps }}
+        run: node scripts/deploy/cd.js "$TARGET_ENV" $APPS

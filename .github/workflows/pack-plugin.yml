@@ -1,0 +1,133 @@
+name: Pack plugin
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'kintone/plugin/**'
+      - 'package-lock.json'
+      - '.github/workflows/pack-plugin.yml'
+
+permissions:
+  contents: read
+
+# 同時に走ると、片方が古いインストール済み一覧を見たまま POST しかねないため直列化する
+concurrency:
+  group: pack-plugin
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    name: Pack and install kintone plugins
+    runs-on: ubuntu-slim
+    environment: plugin-signing
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List plugins to pack
+        id: list
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # ディレクトリ名はシークレット名の導出とパスの組み立てに使うため [a-z0-9-]+ に制限する
+          plugins=$(find kintone/plugin -mindepth 2 -maxdepth 2 -name manifest.json -printf '%h\n' \
+            | sed 's|.*/||' | grep -xE '[a-z0-9-]+' | sort)
+          if [ -z "$plugins" ]; then
+            echo "::error::no manifest.json found under kintone/plugin"
+            exit 1
+          fi
+
+          # 実行中のワークフローファイル自身のパス
+          workflow_path=${GITHUB_WORKFLOW_REF#*/*/}
+          workflow_path=${workflow_path%%@*}
+
+          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "::notice::previous commit is unavailable; packing every plugin"
+          else
+            changed_files=$(git -c core.quotePath=false diff --name-only "$BEFORE" "$GITHUB_SHA")
+            if printf '%s\n' "$changed_files" | grep -qxF -e "$workflow_path" -e package-lock.json; then
+              echo "::notice::dependencies or workflow changed; packing every plugin"
+            else
+              changed=$(printf '%s\n' "$changed_files" | grep '^kintone/plugin/' | cut -d/ -f3 | sort -u || true)
+              plugins=$(comm -12 <(printf '%s\n' "$plugins") <(printf '%s\n' "$changed"))
+            fi
+          fi
+
+          list=$(echo $plugins)
+          echo "::notice::packing ${list:-nothing}"
+          echo "plugins=$list" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.list.outputs.plugins != ''
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.list.outputs.plugins != ''
+        run: npm ci --ignore-scripts
+
+      - name: Pack
+        if: steps.list.outputs.plugins != ''
+        env:
+          PLUGINS: ${{ steps.list.outputs.plugins }}
+          SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          umask 077
+          for plugin in $PLUGINS; do
+            secret_name="PLUGIN_PPK_$(printf '%s' "$plugin" | tr 'a-z-' 'A-Z_')"
+            if ! printf '%s' "$SECRETS" | jq -er --arg name "$secret_name" '.[$name]' > "$RUNNER_TEMP/signing.ppk"; then
+              echo "::error::environment secret $secret_name is not set in the plugin-signing environment"
+              exit 1
+            fi
+            npx cli-kintone plugin pack \
+              --input "kintone/plugin/$plugin/manifest.json" \
+              --private-key "$RUNNER_TEMP/signing.ppk" \
+              --output "$RUNNER_TEMP/dist/$plugin.zip"
+
+            # プラグインIDは公開鍵の SHA-256 の先頭32文字を 0-9a-f → a-p に変換したもの
+            openssl pkey -in "$RUNNER_TEMP/signing.ppk" -pubout -outform DER \
+              | openssl dgst -sha256 | sed 's/.*= //' | cut -c1-32 | tr '0-9a-f' 'a-p' \
+              > "$RUNNER_TEMP/dist/$plugin.id"
+          done
+
+      - name: Install to kintone
+        if: steps.list.outputs.plugins != ''
+        env:
+          PLUGINS: ${{ steps.list.outputs.plugins }}
+          KINTONE_BASE_URL: ${{ secrets.KINTONE_BASE_URL }}
+          KINTONE_USERNAME: ${{ secrets.KINTONE_USERNAME }}
+          KINTONE_PASSWORD: ${{ secrets.KINTONE_PASSWORD }}
+        run: |
+          auth=$(printf '%s:%s' "$KINTONE_USERNAME" "$KINTONE_PASSWORD" | base64 | tr -d '\n')
+
+          # インストール済みプラグインのID一覧（limit 100 は 1 リクエストあたりの上限）
+          installed=$(curl -sfS -H "X-Cybozu-Authorization: $auth" \
+            "$KINTONE_BASE_URL/k/v1/plugins.json?limit=100" | jq -r '.plugins[].id')
+
+          for plugin in $PLUGINS; do
+            plugin_id=$(cat "$RUNNER_TEMP/dist/$plugin.id")
+            file_key=$(curl -sfS -H "X-Cybozu-Authorization: $auth" \
+              -F "file=@$RUNNER_TEMP/dist/$plugin.zip;type=application/zip" \
+              "$KINTONE_BASE_URL/k/v1/file.json" | jq -er '.fileKey')
+
+            if printf '%s\n' "$installed" | grep -qxF "$plugin_id"; then
+              method=PUT
+              body=$(jq -nc --arg id "$plugin_id" --arg fileKey "$file_key" '{$id, $fileKey}')
+            else
+              method=POST
+              body=$(jq -nc --arg fileKey "$file_key" '{$fileKey}')
+            fi
+
+            curl -sfS -X "$method" \
+              -H "X-Cybozu-Authorization: $auth" \
+              -H 'Content-Type: application/json' \
+              -d "$body" \
+              "$KINTONE_BASE_URL/k/v1/plugin.json" > /dev/null
+            echo "::notice::$plugin installed ($method, id=$plugin_id)"
+          done
